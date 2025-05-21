@@ -1,5 +1,6 @@
 ﻿using PharmaManagerUI.ViewModels;
 using System.Windows;
+using System.Windows.Controls;
 
 namespace PharmaManagerUI.Views
 {
@@ -8,13 +9,22 @@ namespace PharmaManagerUI.Views
         public LoginWindow()
         {
             InitializeComponent();
-            DataContext = new LoginViewModel();
+            DataContext = new LoginViewModel(); // Устанавливаем DataContext здесь
+        }
+
+        private void PasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is LoginViewModel viewModel && sender is PasswordBox passwordBox)
+            {
+                viewModel.Password = passwordBox.Password;
+            }
         }
 
         private void Register_Click(object sender, RoutedEventArgs e)
         {
             var registrationWindow = new RegistrationWindow();
-            registrationWindow.ShowDialog();
+            registrationWindow.Show();
+            this.Close();
         }
     }
 }

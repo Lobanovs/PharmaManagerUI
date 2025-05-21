@@ -18,6 +18,7 @@ namespace PharmaManagerUI.Data
         public DbSet<Logistic> Logistics { get; set; }
         public DbSet<PharmacyNetwork> PharmacyNetworks { get; set; }
         public DbSet<Sale> Sales { get; set; }
+        public DbSet<User> Users { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -32,6 +33,7 @@ namespace PharmaManagerUI.Data
             modelBuilder.Entity<Logistic>().ToTable("Logistics");
             modelBuilder.Entity<PharmacyNetwork>().ToTable("Pharmacy_Network");
             modelBuilder.Entity<Sale>().ToTable("Sales");
+            modelBuilder.Entity<User>().ToTable("Users");
         }
     }
 }

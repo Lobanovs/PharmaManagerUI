@@ -9,6 +9,8 @@ using System.ComponentModel;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
+using PharmaManagerUI.Helpers;
+using PharmaManagerUI.Services;
 
 namespace PharmaManagerUI.ViewModels
 {
@@ -25,6 +27,7 @@ namespace PharmaManagerUI.ViewModels
             {
                 _login = value;
                 OnPropertyChanged(nameof(Login));
+                ((RelayCommand)LoginCommand).RaiseCanExecuteChanged();
             }
         }
 
@@ -35,6 +38,7 @@ namespace PharmaManagerUI.ViewModels
             {
                 _password = value;
                 OnPropertyChanged(nameof(Password));
+                ((RelayCommand)LoginCommand).RaiseCanExecuteChanged();
             }
         }
 
@@ -48,39 +52,41 @@ namespace PharmaManagerUI.ViewModels
                 .SetBasePath(AppContext.BaseDirectory)
                 .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
                 .Build();
-            LoginCommand = new RelayCommand(async _ => await ExecuteLoginAsync(), _ => CanExecuteLogin());
+            LoginCommand = new RelayCommand(ExecuteLogin, CanExecuteLogin);
         }
 
-        private bool CanExecuteLogin()
+        private bool CanExecuteLogin(object parameter)
         {
-            return !string.IsNullOrWhiteSpace(Login) && !string.IsNullOrWhiteSpace(Password);
+            bool canExecute = !string.IsNullOrWhiteSpace(Login) && !string.IsNullOrWhiteSpace(Password);
+            System.Diagnostics.Debug.WriteLine($"CanExecuteLogin: {canExecute}, Login: '{Login}', Password: '{Password}'");
+            return canExecute;
         }
 
-        private async Task ExecuteLoginAsync()
+        private async void ExecuteLogin(object parameter)
         {
             try
             {
-                var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
-                optionsBuilder.UseSqlServer(_configuration.GetConnectionString("PharmaManagerDB"));
-                using var ctx = new AppDbContext(optionsBuilder.Options);
-
-                // Предполагаем, что contact_info содержит логин:пароль (нужно уточнить реальную логику)
-                var client = await ctx.Clients.FirstOrDefaultAsync(c => c.ContactInfo.Contains(Login + ":" + Password));
-                if (client != null)
+                using var ctx = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
+                    .UseSqlServer(_configuration.GetConnectionString("PharmaManagerDB")).Options);
+                System.Diagnostics.Debug.WriteLine($"Attempting login with Login: '{Login}'");
+                var user = await ctx.Users.FirstOrDefaultAsync(u => u.Login == Login);
+                if (user != null && PasswordService.VerifyPassword(Password, user.PasswordHash, user.Salt))
                 {
-                    var mainWindow = new MainWindow(client.Name); // Передаём роль или имя клиента
+                    System.Diagnostics.Debug.WriteLine($"Login successful for user: {user.Login}");
+                    var mainWindow = new MainWindow(user.Role);
                     mainWindow.Show();
                     Application.Current.Windows.OfType<LoginWindow>().First().Close();
                 }
                 else
                 {
+                    System.Diagnostics.Debug.WriteLine("Login failed: User not found or password incorrect.");
                     MessageBox.Show("Неверный логин или пароль.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Login error: {ex.Message}");
-                MessageBox.Show("Ошибка подключения к базе данных.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show("Ошибка подключения к базе данных: " + ex.Message, "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 

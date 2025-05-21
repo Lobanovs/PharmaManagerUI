@@ -3,49 +3,66 @@ using Microsoft.Extensions.Configuration;
 using PharmaManagerUI.Commands;
 using PharmaManagerUI.Data;
 using PharmaManagerUI.Models;
-using PharmaManagerUI.Views;
 using System;
 using System.ComponentModel;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
+using PharmaManagerUI.Helpers;
+using PharmaManagerUI.Services;
+using PharmaManagerUI.Views;
 
 namespace PharmaManagerUI.ViewModels
 {
     public class RegistrationViewModel : INotifyPropertyChanged
     {
-        private string _name;
-        private string _address;
-        private string _contactInfo;
+        private string _login;
+        private string _password;
+        private string _confirmPassword;
+        private string _role;
         private readonly IConfiguration _configuration;
 
-        public string Name
+        public string Login
         {
-            get => _name;
+            get => _login;
             set
             {
-                _name = value;
-                OnPropertyChanged(nameof(Name));
+                _login = value;
+                OnPropertyChanged(nameof(Login));
+                ((RelayCommand)RegisterCommand)?.RaiseCanExecuteChanged();
             }
         }
 
-        public string Address
+        public string Password
         {
-            get => _address;
+            get => _password;
             set
             {
-                _address = value;
-                OnPropertyChanged(nameof(Address));
+                _password = value;
+                OnPropertyChanged(nameof(Password));
+                ((RelayCommand)RegisterCommand)?.RaiseCanExecuteChanged();
             }
         }
 
-        public string ContactInfo
+        public string ConfirmPassword
         {
-            get => _contactInfo;
+            get => _confirmPassword;
             set
             {
-                _contactInfo = value;
-                OnPropertyChanged(nameof(ContactInfo));
+                _confirmPassword = value;
+                OnPropertyChanged(nameof(ConfirmPassword));
+                ((RelayCommand)RegisterCommand)?.RaiseCanExecuteChanged();
+            }
+        }
+
+        public string Role
+        {
+            get => _role;
+            set
+            {
+                _role = value;
+                OnPropertyChanged(nameof(Role));
+                ((RelayCommand)RegisterCommand)?.RaiseCanExecuteChanged();
             }
         }
 
@@ -59,29 +76,43 @@ namespace PharmaManagerUI.ViewModels
                 .SetBasePath(AppContext.BaseDirectory)
                 .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
                 .Build();
-            RegisterCommand = new RelayCommand(async _ => await ExecuteRegisterAsync(), _ => CanExecuteRegister());
+            RegisterCommand = new RelayCommand(ExecuteRegister, CanExecuteRegister);
         }
 
-        private bool CanExecuteRegister()
+        private bool CanExecuteRegister(object parameter)
         {
-            return !string.IsNullOrWhiteSpace(Name) && !string.IsNullOrWhiteSpace(Address) && !string.IsNullOrWhiteSpace(ContactInfo);
+            bool canExecute = !string.IsNullOrWhiteSpace(Login) &&
+                             !string.IsNullOrWhiteSpace(Password) &&
+                             Password == ConfirmPassword &&
+                             !string.IsNullOrWhiteSpace(Role);
+
+            System.Diagnostics.Debug.WriteLine($"CanExecuteRegister: {canExecute}");
+            System.Diagnostics.Debug.WriteLine($"Login: '{Login}', Password: '{Password}', ConfirmPassword: '{ConfirmPassword}', Role: '{Role}'");
+
+            return canExecute;
         }
 
-        private async Task ExecuteRegisterAsync()
+        private async void ExecuteRegister(object parameter)
         {
             try
             {
-                var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
-                optionsBuilder.UseSqlServer(_configuration.GetConnectionString("PharmaManagerDB"));
-                using var ctx = new AppDbContext(optionsBuilder.Options);
-
-                var newClient = new Client
+                using var ctx = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
+                    .UseSqlServer(_configuration.GetConnectionString("PharmaManagerDB")).Options);
+                if (await ctx.Users.AnyAsync(u => u.Login == Login))
                 {
-                    Name = Name,
-                    Address = Address,
-                    ContactInfo = ContactInfo // Здесь можно добавить логику для пароля, если нужно
+                    MessageBox.Show("Пользователь с таким логином уже существует.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+
+                var (hash, salt) = PasswordService.HashPassword(Password);
+                var newUser = new User
+                {
+                    Login = Login,
+                    PasswordHash = hash,
+                    Salt = salt,
+                    Role = Role
                 };
-                ctx.Clients.Add(newClient);
+                ctx.Users.Add(newUser);
                 await ctx.SaveChangesAsync();
                 MessageBox.Show("Регистрация прошла успешно.", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
                 var loginWindow = new LoginWindow();
@@ -91,7 +122,7 @@ namespace PharmaManagerUI.ViewModels
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Registration error: {ex.Message}");
-                MessageBox.Show("Ошибка при регистрации.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show("Ошибка при регистрации: " + ex.Message, "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
